@@ -1,0 +1,54 @@
+# Local PostgreSQL integration environment; not an Internet-ready deployment.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: scholarship
+      POSTGRES_USER: scholarship
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scholarship -d scholarship"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/ScholarshipExam.Api/Dockerfile
+    command: ["--migrate"]
+    environment: &api-env
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      Database__Provider: PostgreSQL
+      ConnectionStrings__DefaultConnection: Host=db;Database=scholarship;Username=scholarship;Password=${POSTGRES_PASSWORD}
+      AllowedHosts: localhost;127.0.0.1;api
+      Frontend__Origins__0: http://localhost:8080
+      Bootstrap__Email: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
+      Bootstrap__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      DataProtection__Path: /keys
+    volumes: ["keys:/keys"]
+    depends_on:
+      db: { condition: service_healthy }
+  api:
+    build:
+      context: .
+      dockerfile: backend/ScholarshipExam.Api/Dockerfile
+    environment:
+      <<: *api-env
+      Bootstrap__Email: ""
+      Bootstrap__Password: ""
+    volumes: ["keys:/keys"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports: ["127.0.0.1:8080:80"]
+    depends_on: [api]
+volumes:
+  pgdata:
+  keys:
+

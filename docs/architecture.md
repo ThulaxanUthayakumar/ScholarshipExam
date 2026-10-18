@@ -1,0 +1,14 @@
+# Architecture
+
+React SPA -> Axios with bearer token -> ASP.NET Core API -> EF Core/Identity -> PostgreSQL. SQLite is an explicitly local-only mode. .NET 10 SDK checked: 10.0.402; Node: 24.19.0. Dependencies are pinned; npm lockfile is included. Microsoft/Npgsql compatibility references: https://learn.microsoft.com/aspnet/core/security/authentication/identity-api-authorization?view=aspnetcore-10.0 and https://www.npgsql.org/efcore/release-notes/10.0.html .
+
+Identity hashes passwords and manages roles/lockout. Access tokens use ASP.NET Core's protected opaque bearer format, **not JWT**. Tokens expire after four hours. API checks account-disabled state and security stamp on each authenticated request. Password resets invalidate existing sessions. The SPA uses sessionStorage and clears it on logout or 401; secure the frontend against XSS and never use shared-device sessions without logout. Persist and protect the Data Protection key ring across API restarts/instances. Refresh tokens emitted by the bearer handler are not used or stored; users sign in again after expiration.
+
+One entitlement = one attempt at a distinct exam in a purchased package. Starting and saving/submitting are serialized inside database transactions. PostgreSQL uses a transaction-scoped advisory lock shared by platform writes; this deliberately conservative global lock favors correctness for a small pilot, not high throughput. SQLite uses a single-process semaphore and transactions and is unsuitable for multiple API instances. Unique database indexes provide a second layer of duplicate protection.
+
+Attempts use server UTC timestamps. The client timer is display only. Expired attempts finalize on reads/writes and a 30-second background sweep; downtime is reconciled on the next access/sweep. Only answers saved before expiry count. Empty answers score zero. Repeated submission returns the finalized result. Correct answers/explanations are exposed only on authorized finalized results. Expired, finalized attempts can still earn badges based on saved answers.
+
+Purchased exam content is immutable (editing is blocked once any entitlement exists), preserving scoring history without a separate revision table. JSON imports are validated atomically and idempotent by external key + SHA-256 content hash. Changes to unpaid content reset review and publication. Archiving is blocked for purchased exams; unpublishing hides future sale visibility while existing paid entitlement access remains. A new paper version needs a new key.
+
+A parent creates child accounts directly and cannot claim an arbitrary existing account. No public leaderboard or cash reward. Minimal personal data: alias, email/login, consent timestamp, credentials hash, progress and payment reference. Actual guardian identity verification, retention procedures and published policies are operator launch tasks.
+

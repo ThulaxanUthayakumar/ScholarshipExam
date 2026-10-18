@@ -1,0 +1,1 @@
+Identity and EF Core persistence. AppDb defines the normalized model and constraints. PostgreSQL is the deployment provider; SQLite is restricted to Development/Testing. PostgreSQL migrations are in the API project.
